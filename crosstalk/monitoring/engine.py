@@ -3,9 +3,15 @@ from pathlib import Path
 from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
 
+
+from .logger import log_event
 from .events import make_event
 
 DEFAULT_SHARED_DIR = Path("shared_storage")
+
+record = make_event(event_type, event.src_path)
+print(f"{record['event_type']}: {record['file_path']}")
+log_event(record)
 
 class _EventHandler(FileSystemEventHandler):
     """Recieves file activity from Watchdog and reports it."""
