@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+.env
+.venv/
+venv/
+.DS_Store
+shared_storage/
+test_scenarios/shared_storage/*
+!test_scenarios/shared_storage/.gitkeep
+data/logs/*
+!data/logs/.gitkeep
+data/evidence/*
+!data/evidence/.gitkeep
+data/db/*
+!data/db/.gitkeep
