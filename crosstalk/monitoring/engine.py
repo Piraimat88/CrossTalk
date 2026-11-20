@@ -27,6 +27,7 @@ class _EventHandler(FileSystemEventHandler):
             return
         record = make_event(event_type, event.src_path)
         print(f"{record['event_type']}: {record['file_path']}")
+        log_event(record)
 
 
 class MonitoringEngine:
