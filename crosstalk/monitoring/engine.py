@@ -3,9 +3,8 @@ from pathlib import Path
 from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
 
-
-from .logger import log_event
 from .events import make_event
+from .logger import log_event
 
 DEFAULT_SHARED_DIR = Path("shared_storage")
 
