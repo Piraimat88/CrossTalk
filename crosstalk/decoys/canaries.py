@@ -1,6 +1,9 @@
 import random
 from pathlib import Path
 
+#import default registry path and register_canary function from registry.py
+from .registry import DEFAULT_REGISTRY_PATH, register_canary
+
 """lists topics and kinds of files used to generate decoy/canary files for the monitoring engine"""
 
 TOPICS = ["budget", "meeting", "project","hr", "quarterly", "financial"]
@@ -59,8 +62,8 @@ def generate_canary():
     return file_name, content
 
 #implement planter
-def plant_canary(shared_dir):
-    """Write a new canary file into the shared directory."""
+def plant_canary(shared_dir, registry_path=DEFAULT_REGISTRY_PATH):
+    """Write a new canary file into shared_dir and return its path."""
     folder = Path(shared_dir)
     folder.mkdir(parents=True, exist_ok=True)
 
@@ -72,5 +75,6 @@ def plant_canary(shared_dir):
             break
 
     path.write_text(content, encoding="utf-8")
+    register_canary(path, registry_path)
     return path
 
