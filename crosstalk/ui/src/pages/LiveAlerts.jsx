@@ -7,13 +7,15 @@ import SegmentedControl from '../components/SegmentedControl'
 import SeverityBadge from '../components/SeverityBadge'
 import StatCard from '../components/StatCard'
 import {
+  alertLabel,
+  caseLabel,
   formatDetected,
   formatTime,
   getAgentsInvolved,
   getAlertById,
   getAlerts,
-  getCaseById,
   getCriticalCount,
+  getOpenAlerts,
 } from '../data/selectors'
 import { LAYOUT_TRANSITION, fadeProps, useRowMotion } from '../lib/motion'
 
@@ -46,15 +48,14 @@ function Field({ label, children }) {
 
 function AlertDetail({ alert }) {
   const navigate = useNavigate()
-  const relatedCase = getCaseById(alert.caseId)
   return (
     <aside className="flex min-h-0 flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
       <AnimatePresence mode="wait" initial={false}>
-        <motion.div key={alert.id} {...fadeProps} className="flex min-h-0 flex-1 flex-col">
+        <motion.div key={alert.detection_id} {...fadeProps} className="flex min-h-0 flex-1 flex-col">
           <div className="border-b border-gray-100 px-6 py-5">
             <div className="flex items-center justify-between">
               <span className="text-xs font-medium tracking-wider text-gray-500">
-                ALERT · {alert.id}
+                ALERT · {alertLabel(alert.detection_id)}
               </span>
               <SeverityBadge severity={alert.severity} />
             </div>
@@ -64,20 +65,23 @@ function AlertDetail({ alert }) {
           <div className="flex-1 overflow-y-auto px-6 py-4">
             <dl>
               <Field label="Agent">
-                <span className="flex items-center gap-2 font-semibold">
-                  <span className="flex h-5 w-5 items-center justify-center rounded bg-ink text-[10px] font-bold uppercase text-brand">
-                    {alert.agent[0]}
-                  </span>
-                  {alert.agent}
+                <span className="flex flex-col gap-1.5">
+                  {alert.agents.map((name) => (
+                    <span key={name} className="flex items-center gap-2 font-semibold">
+                      <span className="flex h-5 w-5 items-center justify-center rounded bg-ink text-[10px] font-bold uppercase text-brand">
+                        {name[0]}
+                      </span>
+                      {name}
+                    </span>
+                  ))}
                 </span>
               </Field>
               <Field label="File">
                 <span className="block break-all font-mono text-[13px]">{alert.file}</span>
               </Field>
-              <Field label="Detected">{formatDetected(alert.detectedAt)}</Field>
+              <Field label="Detected">{formatDetected(alert.detected_at)}</Field>
               <Field label="Case">
-                {alert.caseId}
-                {relatedCase ? ` · ${relatedCase.status}` : ''}
+                {caseLabel(alert.case_id)} · {alert.case.status}
               </Field>
             </dl>
 
@@ -85,14 +89,14 @@ function AlertDetail({ alert }) {
               <h3 className="text-[11px] font-semibold tracking-wider text-gray-600">
                 WHY IT WAS FLAGGED
               </h3>
-              <p className="mt-2 text-sm leading-relaxed text-gray-700">{alert.why}</p>
+              <p className="mt-2 text-sm leading-relaxed text-gray-700">{alert.summary}</p>
             </div>
           </div>
 
           <div className="border-t border-gray-100 p-6">
             <button
               type="button"
-              onClick={() => navigate(`/cases?id=${alert.caseId}`)}
+              onClick={() => navigate(`/cases?id=${alert.case_id}`)}
               className="group flex w-full items-center justify-center gap-2 rounded-lg bg-ink py-3.5 text-sm font-semibold text-white transition-[background-color,transform] duration-150 ease-out hover:bg-black motion-safe:active:scale-[0.98]"
             >
               View related case
@@ -112,6 +116,7 @@ export default function LiveAlerts() {
   const row = useRowMotion()
 
   const all = useMemo(() => getAlerts(), [])
+  const openCount = useMemo(() => getOpenAlerts().length, [])
   const selected = getAlertById(params.get('id')) ?? all[0]
 
   const visible = useMemo(() => {
@@ -121,7 +126,7 @@ export default function LiveAlerts() {
         (severity === 'all' || a.severity === severity) &&
         (!q ||
           a.title.toLowerCase().includes(q) ||
-          a.agent.toLowerCase().includes(q) ||
+          a.agents.some((n) => n.toLowerCase().includes(q)) ||
           a.file.toLowerCase().includes(q)),
     )
   }, [all, query, severity])
@@ -135,7 +140,7 @@ export default function LiveAlerts() {
       <div className="grid min-h-0 flex-1 grid-cols-1 gap-5 px-8 py-6 xl:grid-cols-[62fr_38fr]">
         <div className="flex min-h-0 flex-col gap-5">
           <div className="grid shrink-0 grid-cols-3 gap-5">
-            <StatCard index={0} label="Open alerts" value={all.length} />
+            <StatCard index={0} label="Open alerts" value={openCount} />
             <StatCard index={1} label="Critical" value={getCriticalCount(all)} valueTone="critical" />
             <StatCard index={2} label="Agents involved" value={getAgentsInvolved(all)} />
           </div>
@@ -179,16 +184,16 @@ export default function LiveAlerts() {
               <ul className="relative">
                 <AnimatePresence mode="popLayout">
                   {visible.map((a, i) => {
-                    const active = a.id === selected.id
+                    const active = a.detection_id === selected.detection_id
                     return (
                       <motion.li
-                        key={a.id}
+                        key={a.detection_id}
                         {...row(i)}
                         className="relative isolate border-b border-gray-100"
                       >
                         <button
                           type="button"
-                          onClick={() => select(a.id)}
+                          onClick={() => select(a.detection_id)}
                           aria-current={active ? 'true' : undefined}
                           className={`${COLS} w-full py-3 text-left text-sm transition-colors duration-150 focus-visible:-outline-offset-2 ${
                             active ? '' : 'hover:bg-gray-50'
@@ -205,16 +210,21 @@ export default function LiveAlerts() {
                             <span className="block truncate font-medium" title={a.title}>
                               {a.title}
                             </span>
-                            <span className="block text-xs text-gray-500">{a.id}</span>
+                            <span className="block text-xs text-gray-500">
+                              {alertLabel(a.detection_id)}
+                            </span>
                           </span>
-                          <span className="flex min-w-0 items-center gap-2" title={a.agent}>
-                            <AgentAvatar name={a.agent} />
-                            <span className="truncate">{a.agent}</span>
+                          <span
+                            className="flex min-w-0 items-center gap-2"
+                            title={a.agents.join(', ')}
+                          >
+                            <AgentAvatar name={a.agents[0]} />
+                            <span className="truncate">{a.agents.join(', ')}</span>
                           </span>
                           <span className="truncate font-mono text-xs" title={a.file}>
                             {a.file}
                           </span>
-                          <span className="text-gray-600">{formatTime(a.detectedAt)}</span>
+                          <span className="text-gray-600">{formatTime(a.detected_at)}</span>
                           <span>
                             <SeverityBadge severity={a.severity} />
                           </span>
@@ -239,7 +249,7 @@ export default function LiveAlerts() {
               <span>
                 Showing {visible.length} of {all.length} alerts
               </span>
-              <span>Updated {formatTime(all[0].detectedAt).slice(0, 5)}</span>
+              <span>Updated {formatTime(all[0].detected_at).slice(0, 5)}</span>
             </footer>
           </section>
         </div>

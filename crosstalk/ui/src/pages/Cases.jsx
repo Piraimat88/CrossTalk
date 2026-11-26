@@ -8,27 +8,29 @@ import SegmentedControl from '../components/SegmentedControl'
 import SeverityBadge from '../components/SeverityBadge'
 import StatusBadge from '../components/StatusBadge'
 import {
+  caseLabel,
   formatOpened,
   formatShortTime,
   getCaseById,
   getCases,
   getEvidenceForCase,
+  isCaseOpen,
 } from '../data/selectors'
 import { LAYOUT_TRANSITION, fadeProps, useRowMotion } from '../lib/motion'
 
 function CaseDetail({ item }) {
   const navigate = useNavigate()
-  const evidenceCount = getEvidenceForCase(item.id).length
+  const evidenceCount = getEvidenceForCase(item.case_id).length
   const timeline = item.timeline.slice(0, 4)
 
   return (
     <article className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
       <AnimatePresence mode="wait" initial={false}>
-        <motion.div key={item.id} {...fadeProps} className="flex min-h-0 flex-1 flex-col">
+        <motion.div key={item.case_id} {...fadeProps} className="flex min-h-0 flex-1 flex-col">
           <div className="shrink-0 border-b border-gray-100 px-7 py-5">
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-xs font-medium tracking-wider text-gray-500">
-                CASE · {item.id}
+                CASE · {caseLabel(item.case_id)}
               </span>
               <SeverityBadge severity={item.severity} />
               <StatusBadge status={item.status} />
@@ -41,8 +43,8 @@ function CaseDetail({ item }) {
               <div className="min-w-0">
                 <div className="text-xs text-gray-500">Involved agents</div>
                 <div className="mt-2 flex flex-col items-start gap-2">
-                  {item.agents.map((name) => (
-                    <AgentChip key={name} name={name} />
+                  {item.agents.map((agent) => (
+                    <AgentChip key={agent.agent_id} name={agent.name} />
                   ))}
                 </div>
               </div>
@@ -54,7 +56,7 @@ function CaseDetail({ item }) {
               </div>
               <div className="min-w-0">
                 <div className="text-xs text-gray-500">Opened</div>
-                <div className="mt-2 text-sm">{formatOpened(item.openedAt)}</div>
+                <div className="mt-2 text-sm">{formatOpened(item.created_at)}</div>
               </div>
             </div>
 
@@ -70,7 +72,7 @@ function CaseDetail({ item }) {
               {timeline.map((e, i) => {
                 const last = i === timeline.length - 1
                 return (
-                  <li key={`${e.time}-${e.title}`} className="grid grid-cols-[56px_24px_1fr] gap-x-2">
+                  <li key={e.event_id} className="grid grid-cols-[56px_24px_1fr] gap-x-2">
                     <span className="pt-0.5 text-[13px] text-gray-500">{e.time}</span>
                     <span className="relative flex justify-center">
                       <span
@@ -99,7 +101,7 @@ function CaseDetail({ item }) {
             <button
               type="button"
               disabled={evidenceCount === 0}
-              onClick={() => navigate(`/evidence?case=${item.id}`)}
+              onClick={() => navigate(`/evidence?case=${item.case_id}`)}
               className="group flex items-center gap-2 rounded-lg bg-ink px-5 py-3 text-sm font-semibold text-white transition-[background-color,transform] duration-150 ease-out hover:bg-black motion-safe:active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-ink disabled:active:scale-100"
             >
               View evidence
@@ -114,8 +116,8 @@ function CaseDetail({ item }) {
 
 const FILTERS = [
   { value: 'all', label: 'All' },
-  { value: 'Open', label: 'Open' },
-  { value: 'Resolved', label: 'Resolved' },
+  { value: 'open', label: 'Open' },
+  { value: 'closed', label: 'Closed' },
 ]
 
 export default function Cases() {
@@ -124,13 +126,13 @@ export default function Cases() {
   const row = useRowMotion()
 
   const all = useMemo(() => getCases(), [])
+  const matches = (c, f) => f === 'all' || (f === 'open' ? isCaseOpen(c) : !isCaseOpen(c))
   const options = FILTERS.map((f) => ({
     ...f,
-    count: f.value === 'all' ? all.length : all.filter((c) => c.status === f.value).length,
+    count: all.filter((c) => matches(c, f.value)).length,
   }))
-  const visible = filter === 'all' ? all : all.filter((c) => c.status === filter)
-  const selected =
-    getCaseById(params.get('id')) ?? all.find((c) => c.status === 'Open') ?? all[0]
+  const visible = all.filter((c) => matches(c, filter))
+  const selected = getCaseById(params.get('id')) ?? all.find(isCaseOpen) ?? all[0]
 
   return (
     <div className="flex h-full flex-col">
@@ -152,17 +154,17 @@ export default function Cases() {
             <ul className="relative">
               <AnimatePresence mode="popLayout">
                 {visible.map((c, i) => {
-                  const active = c.id === selected.id
+                  const active = c.case_id === selected.case_id
                   return (
                     <motion.li
-                      key={c.id}
+                      key={c.case_id}
                       {...row(i)}
                       className="relative isolate border-b border-gray-100"
                     >
                       <button
                         type="button"
                         aria-current={active ? 'true' : undefined}
-                        onClick={() => setParams({ id: c.id }, { replace: true })}
+                        onClick={() => setParams({ id: c.case_id }, { replace: true })}
                         className={`block w-full px-5 py-4 text-left transition-colors duration-150 focus-visible:-outline-offset-2 ${
                           active ? '' : 'hover:bg-gray-50'
                         }`}
@@ -175,8 +177,8 @@ export default function Cases() {
                           />
                         )}
                         <span className="flex items-center justify-between text-xs text-gray-500">
-                          <span>{c.id}</span>
-                          <span>{formatShortTime(c.openedAt)}</span>
+                          <span>{caseLabel(c.case_id)}</span>
+                          <span>{formatShortTime(c.created_at)}</span>
                         </span>
                         <span className="mt-1.5 block truncate text-sm font-semibold" title={c.title}>
                           {c.title}

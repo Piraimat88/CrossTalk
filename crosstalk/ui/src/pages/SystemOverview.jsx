@@ -4,11 +4,20 @@ import PageHeader from '../components/PageHeader'
 import Panel from '../components/Panel'
 import SeverityBadge from '../components/SeverityBadge'
 import StatCard from '../components/StatCard'
-import { agents, openCases, stats } from '../data/mockData'
-import { formatShortTime, getAlerts } from '../data/selectors'
+import {
+  caseLabel,
+  formatShortTime,
+  getAgentSummaries,
+  getAlerts,
+  getOpenCases,
+  getStats,
+} from '../data/selectors'
 import { useItemMotion } from '../lib/motion'
 
 const latestAlerts = getAlerts().slice(0, 5)
+const openCases = getOpenCases()
+const agents = getAgentSummaries()
+const stats = getStats()
 
 export default function SystemOverview() {
   const item = useItemMotion()
@@ -34,16 +43,18 @@ export default function SystemOverview() {
             <Panel title="Latest alerts" to="/alerts">
               <ul className="divide-y divide-gray-100">
                 {latestAlerts.map((a, i) => (
-                  <motion.li key={a.id} {...item(after + i)}>
+                  <motion.li key={a.detection_id} {...item(after + i)}>
                     <Link
-                      to={`/alerts?id=${a.id}`}
+                      to={`/alerts?id=${a.detection_id}`}
                       className="flex items-center px-5 py-3.5 text-sm transition-colors duration-150 hover:bg-gray-50"
                     >
                       <span className="min-w-0 flex-1 truncate font-medium" title={a.title}>
                         {a.title}
                       </span>
-                      <span className="w-36 text-gray-500">{a.agent}</span>
-                      <span className="w-16 text-gray-500">{formatShortTime(a.detectedAt)}</span>
+                      <span className="w-36 truncate text-gray-500" title={a.agents.join(', ')}>
+                        {a.agents.join(', ')}
+                      </span>
+                      <span className="w-16 text-gray-500">{formatShortTime(a.detected_at)}</span>
                       <span className="w-20 text-right">
                         <SeverityBadge severity={a.severity} />
                       </span>
@@ -56,18 +67,18 @@ export default function SystemOverview() {
             <Panel title="Open cases" to="/cases">
               <ul className="divide-y divide-gray-100">
                 {openCases.map((c, i) => (
-                  <motion.li key={c.id} {...item(after + i)}>
+                  <motion.li key={c.case_id} {...item(after + i)}>
                     <Link
-                      to={`/cases?id=${c.id}`}
+                      to={`/cases?id=${c.case_id}`}
                       className="flex items-center gap-4 px-5 py-3.5 text-sm transition-colors duration-150 hover:bg-gray-50"
                     >
-                      <span className="w-16 text-gray-500">{c.id}</span>
+                      <span className="w-16 text-gray-500">{caseLabel(c.case_id)}</span>
                       <span className="min-w-0 flex-1 truncate font-medium" title={c.title}>
                         {c.title}
                       </span>
                       <SeverityBadge severity={c.severity} />
                       <span className="w-12 text-right text-gray-500">
-                        {formatShortTime(c.openedAt)}
+                        {formatShortTime(c.created_at)}
                       </span>
                     </Link>
                   </motion.li>
@@ -85,7 +96,7 @@ export default function SystemOverview() {
             <ul className="divide-y divide-gray-100">
               {agents.map((a, i) => (
                 <motion.li
-                  key={a.name}
+                  key={a.agent_id}
                   {...item(after + i)}
                   className="flex items-center gap-3 px-5 py-3"
                 >
@@ -95,7 +106,7 @@ export default function SystemOverview() {
                   <div className="flex-1 leading-snug">
                     <div className="text-sm font-semibold">{a.name}</div>
                     <div className="text-xs text-gray-500">
-                      {a.role} · active {a.lastActive}
+                      {a.description} · active {formatShortTime(a.last_seen_at)}
                     </div>
                   </div>
                   <SeverityBadge

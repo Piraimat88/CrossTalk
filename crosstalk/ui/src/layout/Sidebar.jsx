@@ -1,8 +1,10 @@
 import { motion } from 'motion/react'
 import { NavLink } from 'react-router-dom'
 import { BellIcon, ChatIcon, FileIcon, FolderIcon, GridIcon } from '../components/Icons'
-import { navCounts } from '../data/mockData'
+import { getNavCounts } from '../data/selectors'
 import { LAYOUT_TRANSITION } from '../lib/motion'
+
+const navCounts = getNavCounts()
 
 const items = [
   { to: '/', label: 'System Overview', icon: GridIcon, end: true },

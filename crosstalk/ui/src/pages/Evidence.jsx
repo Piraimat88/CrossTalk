@@ -4,15 +4,23 @@ import { Link, useSearchParams } from 'react-router-dom'
 import AgentChip from '../components/AgentChip'
 import { CheckIcon, CopyIcon, DownloadIcon, FileIcon } from '../components/Icons'
 import PageHeader from '../components/PageHeader'
-import { formatDetected, formatTime, getEvidence, getEvidenceById } from '../data/selectors'
+import {
+  caseLabel,
+  evidenceTag,
+  formatDetected,
+  formatSize,
+  formatTime,
+  getEvidence,
+  getEvidenceById,
+} from '../data/selectors'
 import { DURATION, EASE, LAYOUT_TRANSITION, fadeProps, useRowMotion } from '../lib/motion'
 
-function lineClass(type, text, highlighted) {
-  if (type === 'DIFF') {
+function lineClass(kind, text) {
+  if (kind === 'diff') {
     if (text.startsWith('+') && !text.startsWith('+++')) return 'bg-green-50 text-green-800'
     if (text.startsWith('-') && !text.startsWith('---')) return 'bg-red-50 text-red-800'
   }
-  return highlighted ? 'bg-[#FFFCE8]' : ''
+  return ''
 }
 
 function FileBody({ file }) {
@@ -51,10 +59,10 @@ function FileBody({ file }) {
           </h2>
           <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[13px]">
             <AgentChip name={file.agent} />
-            <Link to={`/cases?id=${file.caseId}`} className="font-medium underline">
-              {file.caseId}
+            <Link to={`/cases?id=${file.case_id}`} className="font-medium underline">
+              {caseLabel(file.case_id)}
             </Link>
-            <span className="text-gray-500">{formatDetected(file.capturedAt)}</span>
+            <span className="text-gray-500">{formatDetected(file.captured_at)}</span>
           </div>
         </div>
         <div className="flex shrink-0 gap-2">
@@ -101,7 +109,7 @@ function FileBody({ file }) {
           {lines.map((text, i) => (
             <div
               key={i}
-              className={`flex ${lineClass(file.type, text, file.highlight.includes(i + 1))}`}
+              className={`flex ${lineClass(file.kind, text)}`}
             >
               <span className="w-14 shrink-0 select-none pr-4 text-right text-gray-400">{i + 1}</span>
               <span className="whitespace-pre pr-7">{text || ' '}</span>
@@ -112,18 +120,9 @@ function FileBody({ file }) {
 
       <footer className="flex shrink-0 items-center justify-between gap-4 border-t border-gray-100 px-7 py-3 text-xs text-gray-500">
         <span>
-          {lines.length} lines · {file.size}
+          {lines.length} lines · {formatSize(file.size_bytes)}
         </span>
-        {file.type === 'DIFF' ? (
-          <span>Green lines added · red lines removed</span>
-        ) : (
-          file.highlight.length > 0 && (
-            <span className="flex items-center gap-2">
-              <span className="h-2 w-2 rounded-sm bg-brand" />
-              Highlighted lines are linked to the alert
-            </span>
-          )
-        )}
+        {file.kind === 'diff' && <span>Green lines added · red lines removed</span>}
       </footer>
     </>
   )
@@ -133,7 +132,7 @@ function FilePreview({ file }) {
   return (
     <article className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
       <AnimatePresence mode="wait" initial={false}>
-        <motion.div key={file.id} {...fadeProps} className="flex min-h-0 flex-1 flex-col">
+        <motion.div key={file.evidence_id} {...fadeProps} className="flex min-h-0 flex-1 flex-col">
           <FileBody file={file} />
         </motion.div>
       </AnimatePresence>
@@ -147,9 +146,9 @@ export default function Evidence() {
   const caseId = params.get('case')
 
   const all = getEvidence()
-  const visible = caseId ? all.filter((f) => f.caseId === caseId) : all
+  const visible = caseId ? all.filter((f) => f.case_id === Number(caseId)) : all
   const requested = getEvidenceById(params.get('id'))
-  const selected = visible.find((f) => f.id === requested?.id) ?? visible[0]
+  const selected = visible.find((f) => f.evidence_id === requested?.evidence_id) ?? visible[0]
 
   const select = (id) => {
     const next = new URLSearchParams(params)
@@ -165,7 +164,7 @@ export default function Evidence() {
         <section className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-xl border border-gray-200 bg-white">
           <header className="flex shrink-0 items-center justify-between gap-3 px-5 py-4">
             <h2 className="truncate text-[15px] font-semibold">
-              {caseId ? `Files for ${caseId}` : 'All files'}
+              {caseId ? `Files for ${caseLabel(caseId)}` : 'All files'}
             </h2>
             <span className="flex shrink-0 items-center gap-3 text-xs text-gray-500">
               {visible.length} {visible.length === 1 ? 'file' : 'files'}
@@ -181,17 +180,17 @@ export default function Evidence() {
             <ul className="relative">
               <AnimatePresence mode="popLayout">
                 {visible.map((f, i) => {
-                  const active = f.id === selected.id
+                  const active = f.evidence_id === selected.evidence_id
                   return (
                     <motion.li
-                      key={f.id}
+                      key={f.evidence_id}
                       {...row(i)}
                       className="relative isolate border-b border-gray-100"
                     >
                       <button
                         type="button"
                         aria-current={active ? 'true' : undefined}
-                        onClick={() => select(f.id)}
+                        onClick={() => select(f.evidence_id)}
                         className={`flex w-full items-center gap-3 px-5 py-3 text-left transition-colors duration-150 focus-visible:-outline-offset-2 ${
                           active ? '' : 'hover:bg-gray-50'
                         }`}
@@ -219,10 +218,10 @@ export default function Evidence() {
                           </span>
                           <span className="mt-1 flex items-center gap-2 text-xs text-gray-500">
                             <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-bold text-gray-700">
-                              {f.type}
+                              {evidenceTag(f.kind)}
                             </span>
                             <span className="truncate">
-                              {f.caseId} · {formatTime(f.capturedAt)}
+                              {caseLabel(f.case_id)} · {formatTime(f.captured_at)}
                             </span>
                           </span>
                         </span>
