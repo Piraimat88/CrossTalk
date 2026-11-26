@@ -1,12 +1,16 @@
 import { AnimatePresence, motion } from 'motion/react'
 import { useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
+import { getAlerts } from '../api'
+import { useApi } from '../api/useApi'
 import AgentRoles from '../components/AgentRoles'
+import ErrorState from '../components/ErrorState'
 import { ArrowRightIcon, SearchIcon } from '../components/Icons'
 import MethodBadge from '../components/MethodBadge'
 import PageHeader from '../components/PageHeader'
 import SegmentedControl from '../components/SegmentedControl'
 import SeverityBadge from '../components/SeverityBadge'
+import { Skeleton, SkeletonRows, StatCardSkeleton } from '../components/Skeleton'
 import StatCard from '../components/StatCard'
 import {
   alertLabel,
@@ -14,10 +18,7 @@ import {
   formatDetected,
   formatTime,
   getAgentsInvolved,
-  getAlertById,
-  getAlerts,
   getCriticalCount,
-  getOpenAlerts,
   methodLabel,
   METHOD_LABELS,
 } from '../data/selectors'
@@ -34,6 +35,8 @@ const METHOD_FILTERS = [
   { value: 'all', label: 'All' },
   ...Object.entries(METHOD_LABELS).map(([value, label]) => ({ value, label })),
 ]
+
+const NO_ALERTS = []
 
 const COLS =
   'grid grid-cols-[minmax(0,2.4fr)_minmax(0,1.3fr)_minmax(0,1.5fr)_76px_92px] items-center gap-3 px-5'
@@ -71,6 +74,32 @@ function ScoreBar({ score }) {
         <span className="block h-full rounded-full bg-brand" style={{ width: `${pct}%` }} />
       </span>
     </span>
+  )
+}
+
+// Detail card while the list loads, or when it failed (the list card shows the error).
+function AlertDetailPlaceholder({ loading }) {
+  return (
+    <aside className="flex min-h-[320px] min-w-0 flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+      {loading ? (
+        <div role="status" aria-label="Loading" className="flex-1 px-6 py-5">
+          <Skeleton className="h-3 w-24" />
+          <Skeleton className="mt-5 h-6 w-3/4" />
+          <div className="mt-8 space-y-4">
+            {[0, 1, 2, 3, 4].map((i) => (
+              <div key={i} className="grid grid-cols-[112px_1fr] gap-2">
+                <Skeleton className="h-4 w-16" />
+                <Skeleton className="h-4 w-2/3" />
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <p className="m-auto px-6 py-12 text-center text-sm text-gray-500">
+          Alert details will appear here.
+        </p>
+      )}
+    </aside>
   )
 }
 
@@ -141,9 +170,11 @@ export default function LiveAlerts() {
   const [method, setMethod] = useState('all')
   const row = useRowMotion()
 
-  const all = useMemo(() => getAlerts(), [])
-  const openCount = useMemo(() => getOpenAlerts().length, [])
-  const selected = getAlertById(params.get('id')) ?? all[0]
+  const { data, loading, error, retry } = useApi(getAlerts)
+  const all = data ?? NO_ALERTS
+  const openCount = all.filter((a) => a.case.status !== 'dismissed').length
+  const requestedId = Number(params.get('id'))
+  const selected = all.find((a) => a.detection_id === requestedId) ?? all[0]
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -167,9 +198,22 @@ export default function LiveAlerts() {
       <div className="grid min-h-0 flex-1 grid-cols-1 gap-5 px-8 py-6 xl:grid-cols-[minmax(0,62fr)_minmax(0,38fr)]">
         <div className="flex min-h-0 min-w-0 flex-col gap-5">
           <div className="grid shrink-0 grid-cols-3 gap-5">
-            <StatCard index={0} label="Open alerts" value={openCount} />
-            <StatCard index={1} label="Critical" value={getCriticalCount(all)} valueTone="critical" />
-            <StatCard index={2} label="Agents involved" value={getAgentsInvolved(all)} />
+            {data ? (
+              <>
+                <StatCard index={0} label="Open alerts" value={openCount} />
+                <StatCard
+                  index={1}
+                  label="Critical"
+                  value={getCriticalCount(all)}
+                  valueTone="critical"
+                />
+                <StatCard index={2} label="Agents involved" value={getAgentsInvolved(all)} />
+              </>
+            ) : (
+              [0, 1, 2].map((i) => (
+                <StatCardSkeleton key={i} still={!loading && Boolean(error)} />
+              ))
+            )}
           </div>
 
           <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-gray-200 bg-white">
@@ -206,17 +250,24 @@ export default function LiveAlerts() {
             {/* The table scrolls sideways inside the card instead of widening the page. */}
             <div className="flex min-h-0 flex-1 flex-col overflow-x-auto">
               <div className="flex min-h-0 min-w-[600px] flex-1 flex-col">
-            <div
-              className={`${COLS} shrink-0 border-y border-gray-100 bg-gray-50 py-2.5 text-xs font-medium text-gray-500`}
-            >
-              <span>Event</span>
-              <span>Agent</span>
-              <span>File</span>
-              <span>Time</span>
-              <span>Severity</span>
-            </div>
+                <div
+                  className={`${COLS} shrink-0 border-y border-gray-100 bg-gray-50 py-2.5 text-xs font-medium text-gray-500`}
+                >
+                  <span>Event</span>
+                  <span>Agent</span>
+                  <span>File</span>
+                  <span>Time</span>
+                  <span>Severity</span>
+                </div>
 
-            <div className="max-h-[440px] min-h-0 flex-1 overflow-y-auto xl:max-h-none">
+                <div className="max-h-[440px] min-h-0 flex-1 overflow-y-auto xl:max-h-none">
+                  {!data && loading && (
+                    <SkeletonRows count={6} className="px-5 py-3.5">
+                      <Skeleton className="h-4 w-2/3" />
+                      <Skeleton className="mt-2 h-3 w-1/3" />
+                    </SkeletonRows>
+                  )}
+                  {!data && !loading && error && <ErrorState what="alerts" onRetry={retry} />}
               <ul className="relative">
                 <AnimatePresence mode="popLayout">
                   {visible.map((a, i) => {
@@ -274,7 +325,7 @@ export default function LiveAlerts() {
                 </AnimatePresence>
               </ul>
 
-              {visible.length === 0 && (
+              {data && visible.length === 0 && (
                 <motion.div {...fadeProps} className="px-5 py-16 text-center">
                   <p className="font-semibold">No alerts match your search</p>
                   <p className="mt-1 text-sm text-gray-500">
@@ -282,20 +333,26 @@ export default function LiveAlerts() {
                   </p>
                 </motion.div>
               )}
-            </div>
+                </div>
               </div>
             </div>
 
             <footer className="flex shrink-0 items-center justify-between border-t border-gray-100 px-5 py-3 text-xs text-gray-500">
-              <span>
-                Showing {visible.length} of {all.length} alerts
-              </span>
-              <span>Updated {formatTime(all[0].detected_at).slice(0, 5)}</span>
+              {data ? (
+                <>
+                  <span>
+                    Showing {visible.length} of {all.length} alerts
+                  </span>
+                  <span>Updated {formatTime(all[0].detected_at).slice(0, 5)}</span>
+                </>
+              ) : (
+                <span>&nbsp;</span>
+              )}
             </footer>
           </section>
         </div>
 
-        <AlertDetail alert={selected} />
+        {selected ? <AlertDetail alert={selected} /> : <AlertDetailPlaceholder loading={loading} />}
       </div>
     </div>
   )

@@ -1,17 +1,19 @@
 import { AnimatePresence, motion } from 'motion/react'
 import { useEffect, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
+import { getCaseEvidence, getEvidenceContent, getEvidenceList } from '../api'
+import { useApi } from '../api/useApi'
 import AgentChip from '../components/AgentChip'
+import ErrorState from '../components/ErrorState'
 import { CheckIcon, CopyIcon, DownloadIcon, FileIcon } from '../components/Icons'
 import PageHeader from '../components/PageHeader'
+import { Skeleton, SkeletonRows } from '../components/Skeleton'
 import {
   caseLabel,
   evidenceTag,
   formatDetected,
   formatSize,
   formatTime,
-  getEvidence,
-  getEvidenceById,
 } from '../data/selectors'
 import { DURATION, EASE, LAYOUT_TRANSITION, fadeProps, useRowMotion } from '../lib/motion'
 
@@ -23,16 +25,20 @@ function lineClass(kind, text) {
   return ''
 }
 
-function FileBody({ file }) {
+const NO_FILES = []
+
+// `content` is the state of the content request: { data, error, retry }.
+function FileBody({ file, content }) {
   const [copied, setCopied] = useState(false)
   const timer = useRef(null)
-  const lines = file.content.split('\n')
+  const text = content.data
+  const lines = text == null ? [] : text.split('\n')
 
   useEffect(() => () => clearTimeout(timer.current), [])
 
   const copy = async () => {
     try {
-      await navigator.clipboard.writeText(file.content)
+      await navigator.clipboard.writeText(text)
     } catch {
       return
     }
@@ -42,7 +48,7 @@ function FileBody({ file }) {
   }
 
   const download = () => {
-    const url = URL.createObjectURL(new Blob([file.content], { type: 'text/plain' }))
+    const url = URL.createObjectURL(new Blob([text], { type: 'text/plain' }))
     const a = document.createElement('a')
     a.href = url
     a.download = file.name
@@ -69,7 +75,8 @@ function FileBody({ file }) {
           <button
             type="button"
             onClick={copy}
-            className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3.5 py-2 text-[13px] font-semibold transition-[background-color,transform] duration-150 ease-out hover:bg-gray-50 motion-safe:active:scale-[0.98]"
+            disabled={text == null}
+            className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3.5 py-2 text-[13px] font-semibold transition-[background-color,transform] duration-150 ease-out hover:bg-gray-50 motion-safe:active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
           >
             <span className="relative flex h-[15px] w-[15px] items-center justify-center">
               <AnimatePresence mode="wait" initial={false}>
@@ -90,7 +97,8 @@ function FileBody({ file }) {
           <button
             type="button"
             onClick={download}
-            className="flex items-center gap-2 rounded-lg bg-ink px-3.5 py-2 text-[13px] font-semibold text-white transition-[background-color,transform] duration-150 ease-out hover:bg-black motion-safe:active:scale-[0.98]"
+            disabled={text == null}
+            className="flex items-center gap-2 rounded-lg bg-ink px-3.5 py-2 text-[13px] font-semibold text-white transition-[background-color,transform] duration-150 ease-out hover:bg-black motion-safe:active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-ink"
           >
             <DownloadIcon className="text-brand" /> Download
           </button>
@@ -105,22 +113,32 @@ function FileBody({ file }) {
       </div>
 
       <div className="max-h-[480px] min-h-0 flex-1 overflow-auto py-4 font-mono text-[13px] leading-6 xl:max-h-none">
-        <div className="w-max min-w-full">
-          {lines.map((text, i) => (
-            <div
-              key={i}
-              className={`flex ${lineClass(file.kind, text)}`}
-            >
-              <span className="w-14 shrink-0 select-none pr-4 text-right text-gray-400">{i + 1}</span>
-              <span className="whitespace-pre pr-7">{text || ' '}</span>
-            </div>
-          ))}
-        </div>
+        {text != null ? (
+          <div className="w-max min-w-full">
+            {lines.map((line, i) => (
+              <div key={i} className={`flex ${lineClass(file.kind, line)}`}>
+                <span className="w-14 shrink-0 select-none pr-4 text-right text-gray-400">
+                  {i + 1}
+                </span>
+                <span className="whitespace-pre pr-7">{line || ' '}</span>
+              </div>
+            ))}
+          </div>
+        ) : content.error ? (
+          <ErrorState what="file content" onRetry={content.retry} className="font-sans" />
+        ) : (
+          <div role="status" aria-label="Loading" className="space-y-3 px-7 py-2">
+            {['w-2/3', 'w-5/6', 'w-1/2', 'w-3/4', 'w-2/5'].map((w) => (
+              <Skeleton key={w} className={`h-4 ${w}`} />
+            ))}
+          </div>
+        )}
       </div>
 
       <footer className="flex shrink-0 items-center justify-between gap-4 border-t border-gray-100 px-7 py-3 text-xs text-gray-500">
         <span>
-          {lines.length} lines · {formatSize(file.size_bytes)}
+          {text != null ? `${lines.length} lines · ` : ''}
+          {formatSize(file.size_bytes)}
         </span>
         {file.kind === 'diff' && <span>Green lines added · red lines removed</span>}
       </footer>
@@ -128,12 +146,12 @@ function FileBody({ file }) {
   )
 }
 
-function FilePreview({ file }) {
+function FilePreview({ file, content }) {
   return (
     <article className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
       <AnimatePresence mode="wait" initial={false}>
         <motion.div key={file.evidence_id} {...fadeProps} className="flex min-h-0 flex-1 flex-col">
-          <FileBody file={file} />
+          <FileBody file={file} content={content} />
         </motion.div>
       </AnimatePresence>
     </article>
@@ -145,10 +163,17 @@ export default function Evidence() {
   const row = useRowMotion()
   const caseId = params.get('case')
 
-  const all = getEvidence()
-  const visible = caseId ? all.filter((f) => f.case_id === Number(caseId)) : all
-  const requested = getEvidenceById(params.get('id'))
-  const selected = visible.find((f) => f.evidence_id === requested?.evidence_id) ?? visible[0]
+  const { data, loading, error, retry } = useApi(
+    caseId ? () => getCaseEvidence(caseId) : getEvidenceList,
+    [caseId],
+  )
+  const visible = data ?? NO_FILES
+  const requestedId = Number(params.get('id'))
+  const selected = visible.find((f) => f.evidence_id === requestedId) ?? visible[0]
+  const selectedId = selected?.evidence_id
+
+  // The file body is a second request, made once a file is selected.
+  const content = useApi(selectedId ? () => getEvidenceContent(selectedId) : null, [selectedId])
 
   const select = (id) => {
     const next = new URLSearchParams(params)
@@ -167,7 +192,7 @@ export default function Evidence() {
               {caseId ? `Files for ${caseLabel(caseId)}` : 'All files'}
             </h2>
             <span className="flex shrink-0 items-center gap-3 text-xs text-gray-500">
-              {visible.length} {visible.length === 1 ? 'file' : 'files'}
+              {data && `${visible.length} ${visible.length === 1 ? 'file' : 'files'}`}
               {caseId && (
                 <Link to="/evidence" className="font-semibold text-ink underline">
                   Show all
@@ -177,6 +202,16 @@ export default function Evidence() {
           </header>
 
           <div className="min-h-0 flex-1 overflow-y-auto border-t border-gray-100">
+            {!data && loading && (
+              <SkeletonRows count={6} className="flex items-center gap-3 px-5 py-3">
+                <Skeleton className="h-10 w-10 shrink-0 rounded-lg" />
+                <span className="block min-w-0 flex-1">
+                  <Skeleton className="h-4 w-2/3" />
+                  <Skeleton className="mt-2 h-3 w-1/2" />
+                </span>
+              </SkeletonRows>
+            )}
+            {!data && !loading && error && <ErrorState what="evidence" onRetry={retry} />}
             <ul className="relative">
               <AnimatePresence mode="popLayout">
                 {visible.map((f, i) => {
@@ -231,7 +266,7 @@ export default function Evidence() {
                 })}
               </AnimatePresence>
             </ul>
-            {visible.length === 0 && (
+            {data && visible.length === 0 && (
               <motion.p {...fadeProps} className="px-5 py-12 text-center text-sm text-gray-500">
                 No evidence files for this case.
               </motion.p>
@@ -240,10 +275,10 @@ export default function Evidence() {
         </section>
 
         {selected ? (
-          <FilePreview file={selected} />
+          <FilePreview file={selected} content={content} />
         ) : (
-          <div className="flex items-center justify-center rounded-xl border border-gray-200 bg-white text-sm text-gray-500">
-            Select a file to preview it.
+          <div className="flex min-h-[320px] items-center justify-center rounded-xl border border-gray-200 bg-white text-sm text-gray-500">
+            {loading ? <Skeleton className="h-4 w-40" /> : 'Select a file to preview it.'}
           </div>
         )}
       </div>

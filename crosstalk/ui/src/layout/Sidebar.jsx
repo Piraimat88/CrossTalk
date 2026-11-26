@@ -1,19 +1,22 @@
 import { motion } from 'motion/react'
 import { NavLink } from 'react-router-dom'
 import { BellIcon, ChatIcon, FileIcon, FolderIcon, GridIcon } from '../components/Icons'
-import { getNavCounts } from '../data/selectors'
+import { getOverview } from '../api'
+import { useApi } from '../api/useApi'
 import { LAYOUT_TRANSITION } from '../lib/motion'
-
-const navCounts = getNavCounts()
 
 const items = [
   { to: '/', label: 'System Overview', icon: GridIcon, end: true },
-  { to: '/alerts', label: 'Live Alerts', icon: BellIcon, count: navCounts.alerts, badge: true },
-  { to: '/cases', label: 'Cases', icon: FolderIcon, count: navCounts.cases },
+  { to: '/alerts', label: 'Live Alerts', icon: BellIcon, countKey: 'alerts', badge: true },
+  { to: '/cases', label: 'Cases', icon: FolderIcon, countKey: 'cases' },
   { to: '/evidence', label: 'Evidence', icon: FileIcon },
 ]
 
 export default function Sidebar() {
+  // Counts appear once loaded; if the call fails they stay hidden.
+  const { data } = useApi(getOverview)
+  const navCounts = data?.navCounts
+
   return (
     <aside className="flex w-[232px] shrink-0 flex-col bg-ink text-gray-300">
       <div className="flex items-center gap-2.5 px-6 py-6">
@@ -27,7 +30,9 @@ export default function Sidebar() {
         MONITOR
       </div>
       <nav className="flex flex-col gap-1 px-3.5">
-        {items.map(({ to, label, icon: Icon, end, count, badge }) => (
+        {items.map(({ to, label, icon: Icon, end, countKey, badge }) => {
+          const count = countKey ? navCounts?.[countKey] : null
+          return (
           <NavLink
             key={to}
             to={to}
@@ -62,7 +67,8 @@ export default function Sidebar() {
               </>
             )}
           </NavLink>
-        ))}
+          )
+        })}
       </nav>
 
       <div className="mt-auto flex items-center gap-3 border-t border-white/10 px-6 py-4">

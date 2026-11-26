@@ -1,27 +1,59 @@
 import { AnimatePresence, motion } from 'motion/react'
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
+import { getCases } from '../api'
+import { useApi } from '../api/useApi'
 import AgentRoles from '../components/AgentRoles'
+import ErrorState from '../components/ErrorState'
 import { ArrowRightIcon } from '../components/Icons'
 import MethodBadge from '../components/MethodBadge'
 import PageHeader from '../components/PageHeader'
 import SegmentedControl from '../components/SegmentedControl'
 import SeverityBadge from '../components/SeverityBadge'
+import { Skeleton, SkeletonRows } from '../components/Skeleton'
 import StatusBadge from '../components/StatusBadge'
 import {
   caseLabel,
   formatOpened,
   formatShortTime,
-  getCaseById,
-  getCases,
-  getEvidenceForCase,
   isCaseOpen,
 } from '../data/selectors'
 import { LAYOUT_TRANSITION, fadeProps, useRowMotion } from '../lib/motion'
 
+const NO_CASES = []
+
+// Detail card while the list loads, or when it failed (the list card shows the error).
+function CaseDetailPlaceholder({ loading }) {
+  return (
+    <article className="flex min-h-[320px] min-w-0 flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+      {loading ? (
+        <div role="status" aria-label="Loading" className="flex-1 px-7 py-5">
+          <Skeleton className="h-3 w-40" />
+          <Skeleton className="mt-4 h-7 w-3/4" />
+          <div className="mt-8 grid grid-cols-3 gap-6">
+            {[0, 1, 2].map((i) => (
+              <div key={i}>
+                <Skeleton className="h-3 w-16" />
+                <Skeleton className="mt-3 h-5 w-full" />
+              </div>
+            ))}
+          </div>
+          <Skeleton className="mt-6 h-20 w-full" />
+          <Skeleton className="mt-6 h-4 w-1/2" />
+          <Skeleton className="mt-3 h-4 w-2/3" />
+        </div>
+      ) : (
+        <p className="m-auto px-7 py-12 text-center text-sm text-gray-500">
+          Case details will appear here.
+        </p>
+      )}
+    </article>
+  )
+}
+
 function CaseDetail({ item }) {
   const navigate = useNavigate()
-  const evidenceCount = getEvidenceForCase(item.case_id).length
+  const evidenceCount = item.evidence_count
   const timeline = item.timeline.slice(0, 4)
 
   return (
@@ -129,14 +161,17 @@ export default function Cases() {
   const [filter, setFilter] = useState('all')
   const row = useRowMotion()
 
-  const all = useMemo(() => getCases(), [])
+  const { data, loading, error, retry } = useApi(getCases)
+  const all = data ?? NO_CASES
   const matches = (c, f) => f === 'all' || (f === 'open' ? isCaseOpen(c) : !isCaseOpen(c))
   const options = FILTERS.map((f) => ({
     ...f,
-    count: all.filter((c) => matches(c, f.value)).length,
+    count: data ? all.filter((c) => matches(c, f.value)).length : undefined,
   }))
   const visible = all.filter((c) => matches(c, filter))
-  const selected = getCaseById(params.get('id')) ?? all.find(isCaseOpen) ?? all[0]
+  const requestedId = Number(params.get('id'))
+  const selected =
+    all.find((c) => c.case_id === requestedId) ?? all.find(isCaseOpen) ?? all[0]
 
   return (
     <div className="flex min-h-full flex-col xl:h-full">
@@ -155,6 +190,14 @@ export default function Cases() {
           </div>
 
           <div className="min-h-0 flex-1 overflow-y-auto">
+            {!data && loading && (
+              <SkeletonRows count={6} className="px-5 py-4">
+                <Skeleton className="h-3 w-1/3" />
+                <Skeleton className="mt-2.5 h-4 w-3/4" />
+                <Skeleton className="mt-3 h-5 w-1/2" />
+              </SkeletonRows>
+            )}
+            {!data && !loading && error && <ErrorState what="cases" onRetry={retry} />}
             <ul className="relative">
               <AnimatePresence mode="popLayout">
                 {visible.map((c, i) => {
@@ -197,7 +240,7 @@ export default function Cases() {
                 })}
               </AnimatePresence>
             </ul>
-            {visible.length === 0 && (
+            {data && visible.length === 0 && (
               <motion.p {...fadeProps} className="px-5 py-12 text-center text-sm text-gray-500">
                 No cases in this view.
               </motion.p>
@@ -205,7 +248,7 @@ export default function Cases() {
           </div>
         </section>
 
-        <CaseDetail item={selected} />
+        {selected ? <CaseDetail item={selected} /> : <CaseDetailPlaceholder loading={loading} />}
       </div>
     </div>
   )

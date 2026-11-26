@@ -106,6 +106,7 @@ function buildCase(c) {
     ...c,
     agents: agentsForCase(c.case_id),
     methods: [...new Set(caseDetections.map((d) => d.method))],
+    evidence_count: evidence.filter((e) => e.case_id === c.case_id).length,
     file: events[0]?.path_at_event ?? '',
     reason: caseDetections.map((d) => d.details.summary).join(' '),
     timeline,
