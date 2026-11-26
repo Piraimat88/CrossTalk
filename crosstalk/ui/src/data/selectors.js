@@ -32,6 +32,19 @@ const ACTION_VERBS = {
   delete: 'Deleted',
 }
 
+// Shared labels. Every page takes method and role labels from here.
+export const METHOD_LABELS = {
+  provenance: 'Cross-agent read',
+  decoy_access: 'Decoy touched',
+  message_filename: 'Hidden message',
+}
+export const ROLE_LABELS = { writer: 'Wrote', reader: 'Read', accessor: 'Accessed' }
+export const methodLabel = (method) => METHOD_LABELS[method] ?? method
+export const roleLabel = (role) => ROLE_LABELS[role] ?? role
+
+// writer -> reader -> accessor, so provenance reads "writer -> reader".
+const ROLE_ORDER = ['writer', 'reader', 'accessor']
+
 const EVIDENCE_TAGS = { event_log: 'LOG', file_copy: 'FILE', diff: 'DIFF', manifest: 'JSON' }
 export const evidenceTag = (kind) => EVIDENCE_TAGS[kind] ?? kind
 
@@ -58,6 +71,7 @@ const agentsForCase = (caseId) =>
   case_agents
     .filter((ca) => ca.case_id === caseId)
     .map((ca) => ({ ...agentById(ca.agent_id), role: ca.role }))
+    .sort((a, b) => ROLE_ORDER.indexOf(a.role) - ROLE_ORDER.indexOf(b.role))
 
 function buildAlert(d) {
   const events = eventsForDetection(d.detection_id)
@@ -68,6 +82,8 @@ function buildAlert(d) {
     ...d,
     title: alertTitle(d.method, file),
     agents: names,
+    // case_agents of the linked case, limited to the agents of this detection's events
+    roles: agentsForCase(d.case_id).filter((a) => names.includes(a.name)),
     file,
     severity: relatedCase.severity,
     case: relatedCase,
@@ -89,6 +105,7 @@ function buildCase(c) {
   return {
     ...c,
     agents: agentsForCase(c.case_id),
+    methods: [...new Set(caseDetections.map((d) => d.method))],
     file: events[0]?.path_at_event ?? '',
     reason: caseDetections.map((d) => d.details.summary).join(' '),
     timeline,

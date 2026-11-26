@@ -1,8 +1,9 @@
 import { AnimatePresence, motion } from 'motion/react'
 import { useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import AgentChip from '../components/AgentChip'
+import AgentRoles from '../components/AgentRoles'
 import { ArrowRightIcon } from '../components/Icons'
+import MethodBadge from '../components/MethodBadge'
 import PageHeader from '../components/PageHeader'
 import SegmentedControl from '../components/SegmentedControl'
 import SeverityBadge from '../components/SeverityBadge'
@@ -39,13 +40,11 @@ function CaseDetail({ item }) {
           </div>
 
           <div className="min-h-0 flex-1 overflow-y-auto px-7 py-6">
-            <div className="grid grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
               <div className="min-w-0">
                 <div className="text-xs text-gray-500">Involved agents</div>
-                <div className="mt-2 flex flex-col items-start gap-2">
-                  {item.agents.map((agent) => (
-                    <AgentChip key={agent.agent_id} name={agent.name} />
-                  ))}
+                <div className="mt-2">
+                  <AgentRoles agents={item.agents} />
                 </div>
               </div>
               <div className="min-w-0">
@@ -61,9 +60,14 @@ function CaseDetail({ item }) {
             </div>
 
             <div className="mt-6 min-w-0 rounded-lg border border-gray-200 bg-[#FAFAF5] p-4">
-              <h3 className="text-[11px] font-semibold tracking-wider text-gray-600">
-                DETECTION REASON
-              </h3>
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="text-[11px] font-semibold tracking-wider text-gray-600">
+                  DETECTION REASON
+                </h3>
+                {item.methods.map((m) => (
+                  <MethodBadge key={m} method={m} />
+                ))}
+              </div>
               <p className="mt-2 break-words text-sm leading-relaxed text-gray-700">{item.reason}</p>
             </div>
 
@@ -135,11 +139,11 @@ export default function Cases() {
   const selected = getCaseById(params.get('id')) ?? all.find(isCaseOpen) ?? all[0]
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex min-h-full flex-col xl:h-full">
       <PageHeader title="Cases" subtitle="Investigations grouped from related alerts." />
 
-      <div className="grid min-h-0 flex-1 grid-cols-1 gap-6 px-8 py-6 lg:grid-cols-[35fr_65fr]">
-        <section className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-xl border border-gray-200 bg-white">
+      <div className="grid min-h-0 flex-1 grid-cols-1 gap-6 px-8 py-6 xl:grid-cols-[minmax(0,35fr)_minmax(0,65fr)]">
+        <section className="flex max-h-[480px] min-h-0 min-w-0 flex-col overflow-hidden rounded-xl border border-gray-200 bg-white xl:max-h-none">
           <div className="shrink-0 border-b border-gray-100 p-4">
             <SegmentedControl
               variant="outline"

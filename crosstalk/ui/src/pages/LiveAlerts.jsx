@@ -1,7 +1,9 @@
 import { AnimatePresence, motion } from 'motion/react'
 import { useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
+import AgentRoles from '../components/AgentRoles'
 import { ArrowRightIcon, SearchIcon } from '../components/Icons'
+import MethodBadge from '../components/MethodBadge'
 import PageHeader from '../components/PageHeader'
 import SegmentedControl from '../components/SegmentedControl'
 import SeverityBadge from '../components/SeverityBadge'
@@ -16,6 +18,8 @@ import {
   getAlerts,
   getCriticalCount,
   getOpenAlerts,
+  methodLabel,
+  METHOD_LABELS,
 } from '../data/selectors'
 import { LAYOUT_TRANSITION, fadeProps, useRowMotion } from '../lib/motion'
 
@@ -24,6 +28,11 @@ const FILTERS = [
   { value: 'critical', label: 'Critical' },
   { value: 'high', label: 'High' },
   { value: 'low', label: 'Low' },
+]
+
+const METHOD_FILTERS = [
+  { value: 'all', label: 'All' },
+  ...Object.entries(METHOD_LABELS).map(([value, label]) => ({ value, label })),
 ]
 
 const COLS =
@@ -46,6 +55,25 @@ function Field({ label, children }) {
   )
 }
 
+function ScoreBar({ score }) {
+  const pct = Math.round(score * 100)
+  return (
+    <span className="flex items-center gap-3">
+      <span className="w-10 font-semibold tabular-nums">{pct}%</span>
+      <span
+        role="meter"
+        aria-label="Detection score"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={pct}
+        className="h-1.5 flex-1 overflow-hidden rounded-full bg-gray-100"
+      >
+        <span className="block h-full rounded-full bg-brand" style={{ width: `${pct}%` }} />
+      </span>
+    </span>
+  )
+}
+
 function AlertDetail({ alert }) {
   const navigate = useNavigate()
   return (
@@ -64,17 +92,14 @@ function AlertDetail({ alert }) {
 
           <div className="flex-1 overflow-y-auto px-6 py-4">
             <dl>
-              <Field label="Agent">
-                <span className="flex flex-col gap-1.5">
-                  {alert.agents.map((name) => (
-                    <span key={name} className="flex items-center gap-2 font-semibold">
-                      <span className="flex h-5 w-5 items-center justify-center rounded bg-ink text-[10px] font-bold uppercase text-brand">
-                        {name[0]}
-                      </span>
-                      {name}
-                    </span>
-                  ))}
-                </span>
+              <Field label="Method">
+                <span className="font-semibold">{methodLabel(alert.method)}</span>
+              </Field>
+              <Field label="Score">
+                <ScoreBar score={alert.score} />
+              </Field>
+              <Field label="Agents">
+                <AgentRoles agents={alert.roles} />
               </Field>
               <Field label="File">
                 <span className="block break-all font-mono text-[13px]">{alert.file}</span>
@@ -113,6 +138,7 @@ export default function LiveAlerts() {
   const [params, setParams] = useSearchParams()
   const [query, setQuery] = useState('')
   const [severity, setSeverity] = useState('all')
+  const [method, setMethod] = useState('all')
   const row = useRowMotion()
 
   const all = useMemo(() => getAlerts(), [])
@@ -124,21 +150,22 @@ export default function LiveAlerts() {
     return all.filter(
       (a) =>
         (severity === 'all' || a.severity === severity) &&
+        (method === 'all' || a.method === method) &&
         (!q ||
           a.title.toLowerCase().includes(q) ||
           a.agents.some((n) => n.toLowerCase().includes(q)) ||
           a.file.toLowerCase().includes(q)),
     )
-  }, [all, query, severity])
+  }, [all, query, severity, method])
 
   const select = (id) => setParams({ id }, { replace: true })
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex min-h-full flex-col xl:h-full">
       <PageHeader title="Live Alerts" subtitle="Suspicious agent activity from the last 24 hours." />
 
-      <div className="grid min-h-0 flex-1 grid-cols-1 gap-5 px-8 py-6 xl:grid-cols-[62fr_38fr]">
-        <div className="flex min-h-0 flex-col gap-5">
+      <div className="grid min-h-0 flex-1 grid-cols-1 gap-5 px-8 py-6 xl:grid-cols-[minmax(0,62fr)_minmax(0,38fr)]">
+        <div className="flex min-h-0 min-w-0 flex-col gap-5">
           <div className="grid shrink-0 grid-cols-3 gap-5">
             <StatCard index={0} label="Open alerts" value={openCount} />
             <StatCard index={1} label="Critical" value={getCriticalCount(all)} valueTone="critical" />
@@ -168,8 +195,17 @@ export default function LiveAlerts() {
                 value={severity}
                 onChange={setSeverity}
               />
+              <SegmentedControl
+                label="Filter by method"
+                options={METHOD_FILTERS}
+                value={method}
+                onChange={setMethod}
+              />
             </div>
 
+            {/* The table scrolls sideways inside the card instead of widening the page. */}
+            <div className="flex min-h-0 flex-1 flex-col overflow-x-auto">
+              <div className="flex min-h-0 min-w-[600px] flex-1 flex-col">
             <div
               className={`${COLS} shrink-0 border-y border-gray-100 bg-gray-50 py-2.5 text-xs font-medium text-gray-500`}
             >
@@ -180,7 +216,7 @@ export default function LiveAlerts() {
               <span>Severity</span>
             </div>
 
-            <div className="min-h-0 flex-1 overflow-y-auto">
+            <div className="max-h-[440px] min-h-0 flex-1 overflow-y-auto xl:max-h-none">
               <ul className="relative">
                 <AnimatePresence mode="popLayout">
                   {visible.map((a, i) => {
@@ -210,8 +246,11 @@ export default function LiveAlerts() {
                             <span className="block truncate font-medium" title={a.title}>
                               {a.title}
                             </span>
-                            <span className="block text-xs text-gray-500">
-                              {alertLabel(a.detection_id)}
+                            <span className="mt-0.5 flex items-center gap-2 text-xs text-gray-500">
+                              <span className="shrink-0 whitespace-nowrap">
+                                {alertLabel(a.detection_id)}
+                              </span>
+                              <MethodBadge method={a.method} />
                             </span>
                           </span>
                           <span
@@ -239,10 +278,12 @@ export default function LiveAlerts() {
                 <motion.div {...fadeProps} className="px-5 py-16 text-center">
                   <p className="font-semibold">No alerts match your search</p>
                   <p className="mt-1 text-sm text-gray-500">
-                    Try a different keyword or severity filter.
+                    Try a different keyword, severity or method.
                   </p>
                 </motion.div>
               )}
+            </div>
+              </div>
             </div>
 
             <footer className="flex shrink-0 items-center justify-between border-t border-gray-100 px-5 py-3 text-xs text-gray-500">

@@ -28,3 +28,8 @@
     outline-offset: 2px;
   }
 }
+
+/* Inner scrolling panels (not the page box itself) keep their width when a scrollbar appears. */
+main > * :where(.overflow-y-auto, .overflow-auto) {
+  scrollbar-gutter: stable;
+}

@@ -104,7 +104,7 @@ function FileBody({ file }) {
         </span>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-auto py-4 font-mono text-[13px] leading-6">
+      <div className="max-h-[480px] min-h-0 flex-1 overflow-auto py-4 font-mono text-[13px] leading-6 xl:max-h-none">
         <div className="w-max min-w-full">
           {lines.map((text, i) => (
             <div
@@ -157,11 +157,11 @@ export default function Evidence() {
   }
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex min-h-full flex-col xl:h-full">
       <PageHeader title="Evidence" subtitle="Files and logs captured for each case." />
 
-      <div className="grid min-h-0 flex-1 grid-cols-1 gap-6 px-8 py-6 lg:grid-cols-[35fr_65fr]">
-        <section className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-xl border border-gray-200 bg-white">
+      <div className="grid min-h-0 flex-1 grid-cols-1 gap-6 px-8 py-6 xl:grid-cols-[minmax(0,35fr)_minmax(0,65fr)]">
+        <section className="flex max-h-[480px] min-h-0 min-w-0 flex-col overflow-hidden rounded-xl border border-gray-200 bg-white xl:max-h-none">
           <header className="flex shrink-0 items-center justify-between gap-3 px-5 py-4">
             <h2 className="truncate text-[15px] font-semibold">
               {caseId ? `Files for ${caseLabel(caseId)}` : 'All files'}

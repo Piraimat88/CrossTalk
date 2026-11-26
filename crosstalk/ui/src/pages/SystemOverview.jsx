@@ -38,8 +38,8 @@ export default function SystemOverview() {
           ))}
         </div>
 
-        <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-[1fr_440px]">
-          <div className="space-y-5">
+        <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,1fr)_440px]">
+          <div className="min-w-0 space-y-5">
             <Panel title="Latest alerts" to="/alerts">
               <ul className="divide-y divide-gray-100">
                 {latestAlerts.map((a, i) => (
@@ -91,7 +91,7 @@ export default function SystemOverview() {
             title="Agents"
             meta={`${agents.length} monitored`}
             footer="Status reflects alerts from the last 24 hours"
-            className="min-h-[640px]"
+            className="xl:min-h-[640px]"
           >
             <ul className="divide-y divide-gray-100">
               {agents.map((a, i) => (
@@ -103,9 +103,9 @@ export default function SystemOverview() {
                   <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-ink text-[13px] font-bold uppercase text-brand">
                     {a.name[0]}
                   </span>
-                  <div className="flex-1 leading-snug">
-                    <div className="text-sm font-semibold">{a.name}</div>
-                    <div className="text-xs text-gray-500">
+                  <div className="min-w-0 flex-1 leading-snug">
+                    <div className="truncate text-sm font-semibold">{a.name}</div>
+                    <div className="truncate text-xs text-gray-500" title={a.description}>
                       {a.description} · active {formatShortTime(a.last_seen_at)}
                     </div>
                   </div>
